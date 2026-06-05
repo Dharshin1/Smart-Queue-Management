@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Token & Queue Management System</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', sans-serif; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); min-height: 100vh; }
+    .dashboard { max-width: 1400px; margin: 0 auto; padding: 20px; }
+
+    h1 { color: white; text-align: center; margin-bottom: 8px; font-size: 2.2em; text-shadow: 2px 2px 8px rgba(0,0,0,0.5); }
+    .subtitle { color: rgba(255,255,255,0.6); text-align: center; margin-bottom: 30px; font-size: 0.95em; }
+
+    /* Stats */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 25px; }
+    .stat { background: rgba(255,255,255,0.08); padding: 15px 20px; border-radius: 14px; color: white; font-size: 1.05em; font-weight: bold; backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }
+    .stat.online { background: rgba(40,167,69,0.3); border-color: #28a745; }
+    .stat.offline { background: rgba(220,53,69,0.3); border-color: #dc3545; animation: pulse 2s infinite; }
+    .stat.hw-ok { background: rgba(0,123,255,0.25); border-color: #007bff; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.65} }
+
+    /* Next token */
+    .next-token { text-align: center; margin: 20px 0; background: rgba(255,255,255,0.06); padding: 28px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.12); }
+    .next-token h2 { color: rgba(255,255,255,0.8); font-size: 1.5em; margin-bottom: 12px; }
+    #nextToken { color: #FFD700; font-size: 3.8em; font-weight: bold; text-shadow: 0 0 20px rgba(255,215,0,0.5); display: block; }
+    #nextPriority { font-size: 0.9em; color: rgba(255,255,255,0.5); margin-top: 4px; }
+    .call-btn { background: linear-gradient(45deg, #e74c3c, #c0392b); color: white; border: none; padding: 16px 45px; font-size: 1.4em; border-radius: 50px; cursor: pointer; transition: all 0.3s; box-shadow: 0 6px 20px rgba(231,76,60,0.4); margin-top: 16px; }
+    .call-btn:hover { transform: translateY(-3px); box-shadow: 0 10px 30px rgba(231,76,60,0.6); }
+
+    /* Cards */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0; }
+    @media(max-width:900px){ .grid-2{ grid-template-columns:1fr; } }
+    .card { background: rgba(255,255,255,0.97); padding: 25px; border-radius: 18px; box-shadow: 0 12px 35px rgba(0,0,0,0.2); }
+    .card h3 { color: #222; margin-bottom: 18px; font-size: 1.3em; display: flex; align-items: center; gap: 8px; }
+
+    /* Priority badges */
+    .badge { padding: 3px 10px; border-radius: 20px; font-size: 0.75em; font-weight: bold; display: inline-block; }
+    .badge.emergency { background: #ff4757; color: white; }
+    .badge.senior    { background: #ffa502; color: white; }
+    .badge.normal    { background: #2ed573; color: white; }
+
+    /* Queue items */
+    #queueItems { max-height: 380px; overflow-y: auto; }
+    .queue-item { padding: 14px 16px; margin: 10px 0; border-radius: 12px; background: #f8f9fa; border-left: 5px solid #007bff; transition: all 0.3s; }
+    .queue-item.called    { border-left-color: #e74c3c; background: #fff5f5; }
+    .queue-item.waiting   { border-left-color: #2ed573; }
+    .queue-item.emergency { border-left-color: #ff4757 !important; background: #fff0f1; }
+    .queue-item.senior    { border-left-color: #ffa502 !important; background: #fffbf0; }
+    .q-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+    .q-token { font-weight: bold; font-size: 1.1em; }
+    .q-meta { font-size: 0.82em; color: #666; margin-top: 3px; }
+    .serve-btn { padding: 5px 12px; background: #28a745; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 0.8em; }
+    .serve-btn:hover { background: #218838; }
+
+    /* Registration form */
+    .form-row { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+    input, select { padding: 12px 14px; border: 2px solid #e0e0e0; border-radius: 10px; font-size: 15px; transition: border 0.3s; flex: 1; min-width: 160px; }
+    input:focus, select:focus { border-color: #007bff; outline: none; box-shadow: 0 0 8px rgba(0,123,255,0.2); }
+    .add-btn { padding: 12px 28px; background: linear-gradient(45deg, #007bff, #0056b3); color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; font-size: 1em; transition: all 0.3s; }
+    .add-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,123,255,0.4); }
+
+    /* Wait estimate preview */
+    #waitPreview { margin-top: 10px; padding: 10px 14px; background: #e8f4fd; border-radius: 8px; font-size: 0.9em; color: #0066cc; display: none; }
+
+    /* Status grid */
+    .status-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .status-item { background: #f1f3f4; padding: 14px; border-radius: 10px; border-left: 4px solid #28a745; }
+    .status-item strong { color: #444; display: block; font-size: 0.85em; margin-bottom: 3px; }
+    .status-item span { font-size: 0.95em; color: #222; }
+
+    /* Empty state */
+    .empty { text-align: center; color: #aaa; padding: 40px; font-size: 0.95em; }
+  </style>
+</head>
+<body>
+<div class="dashboard">
+  <h1>🎫 Smart Token & Queue Management</h1>
+  <p class="subtitle">Government Hospital OPD — Offline-First System with Priority Queue & Wait Time Prediction</p>
+
+  <!-- Stats -->
+  <div class="stats-grid">
+    <div class="stat">⏳ Waiting: <span id="waitingCount">0</span></div>
+    <div class="stat">📢 Called: <span id="calledCount">0</span></div>
+    <div class="stat">🚨 Emergency: <span id="emergCount">0</span></div>
+    <div class="stat" id="netStatus">🌐 Checking...</div>
+    <div class="stat" id="hwStatus">💻 Checking...</div>
+  </div>
+
+  <!-- Call Next -->
+  <div class="next-token">
+    <h2>NOW CALLING</h2>
+    <span id="nextToken">--</span>
+    <div id="nextPriority"></div>
+    <button onclick="callNext()" class="call-btn">📢 CALL NEXT PATIENT</button>
+  </div>
+
+  <!-- Queue + Register -->
+  <div class="grid-2">
+    <!-- Live Queue -->
+    <div class="card">
+      <h3>📋 Live Queue <span style="font-size:0.7em;color:#888;font-weight:normal;">(Priority-Ordered)</span></h3>
+      <div id="queueItems"><div class="empty">Loading queue...</div></div>
+    </div>
+
+    <!-- Register -->
+    <div class="card">
+      <h3>➕ Register Patient</h3>
+      <div class="form-row">
+        <input type="text" id="tokenInput" placeholder="Token (e.g. A001)">
+        <input type="text" id="patientInput" placeholder="Patient Name">
+      </div>
+      <div class="form-row">
+        <select id="prioritySelect" onchange="updateWaitPreview()">
+          <option value="normal">🟢 Normal</option>
+          <option value="senior">🟠 Senior Citizen</option>
+          <option value="emergency">🔴 Emergency</option>
+        </select>
+        <input type="number" id="counterInput" placeholder="Counter No." value="1" min="1" max="10">
+      </div>
+      <div id="waitPreview">🔮 Estimated wait: calculating...</div>
+      <button onclick="scanRFID()" class="add-btn">➕ ADD TO QUEUE</button>
+      <p style="margin-top:10px;font-size:0.82em;color:#999;">Press ENTER to add faster</p>
+    </div>
+  </div>
+
+  <!-- System Status -->
+  <div class="card">
+    <h3>🖥️ System Status</h3>
+    <div class="status-grid">
+      <div class="status-item"><strong>SQLite (Local DB)</strong><span id="sqliteStatus">✅ LIVE</span></div>
+      <div class="status-item"><strong>MySQL (Cloud Sync)</strong><span id="mysqlStatus">⚠️ Checking</span></div>
+      <div class="status-item"><strong>Hardware</strong><span id="hwStatusDetail">💻 Software Mode</span></div>
+      <div class="status-item"><strong>Last Update</strong><span id="lastSync">—</span></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script>
+  const socket = io();
+
+  socket.on('queueUpdate', (data) => {
+    loadQueue();
+    updateStats();
+    updateSystemStatus();
+    if (data && data.called) {
+      document.getElementById('nextToken').textContent = data.called;
+      const p = data.priority || 'normal';
+      document.getElementById('nextPriority').textContent =
+        p === 'emergency' ? '🔴 EMERGENCY' : p === 'senior' ? '🟠 SENIOR' : '🟢 NORMAL';
+    }
+  });
+
+  // ── Load Queue ──────────────────────────────
+  async function loadQueue() {
+    try {
+      const res = await fetch('/api/queue');
+      const queue = await res.json();
+
+      const waiting  = queue.filter(q => q.status === 'waiting');
+      const called   = queue.filter(q => q.status === 'called');
+      const emergs   = waiting.filter(q => q.priority === 'emergency');
+
+      document.getElementById('waitingCount').textContent = waiting.length;
+      document.getElementById('calledCount').textContent  = called.length;
+      document.getElementById('emergCount').textContent   = emergs.length;
+
+      if (!queue.length) {
+        document.getElementById('queueItems').innerHTML =
+          '<div class="empty">✅ Queue is empty</div>';
+        return;
+      }
+
+      document.getElementById('queueItems').innerHTML = queue.map(item => {
+        const priLabel = item.priority === 'emergency'
+          ? '<span class="badge emergency">🚨 Emergency</span>'
+          : item.priority === 'senior'
+          ? '<span class="badge senior">👴 Senior</span>'
+          : '<span class="badge normal">✅ Normal</span>';
+
+        const waitInfo = item.status === 'waiting' && item.estimated_wait_mins !== undefined
+          ? `⏱ ~${item.estimated_wait_mins} min wait · ` : '';
+
+        const serveBtn = item.status === 'called'
+          ? `<button class="serve-btn" onclick="markServed(${item.id})">✅ Done</button>` : '';
+
+        return `
+          <div class="queue-item ${item.status} ${item.priority}">
+            <div class="q-top">
+              <span class="q-token">🎫 ${item.token} — ${item.patient}</span>
+              <span>${priLabel} ${serveBtn}</span>
+            </div>
+            <div class="q-meta">
+              ${waitInfo}${item.status === 'waiting' ? '⏳ Waiting' : '📢 Called'} ·
+              ${new Date(item.registered_at).toLocaleTimeString()}
+            </div>
+          </div>`;
+      }).join('');
+    } catch (e) {
+      document.getElementById('queueItems').innerHTML =
+        '<div class="empty">SQLite connection active</div>';
+    }
+  }
+
+  // ── Register Patient ─────────────────────────
+  async function scanRFID() {
+    const token    = document.getElementById('tokenInput').value.trim().toUpperCase()
+                     || 'A' + Date.now().toString().slice(-3);
+    const patient  = document.getElementById('patientInput').value.trim();
+    const priority = document.getElementById('prioritySelect').value;
+    const counter  = parseInt(document.getElementById('counterInput').value) || 1;
+
+    if (!patient) { alert('Enter patient name!'); return; }
+
+    const res = await fetch('/api/scan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, patient, priority, counter })
+    });
+
+    if (res.ok) {
+      document.getElementById('tokenInput').value    = '';
+      document.getElementById('patientInput').value  = '';
+      document.getElementById('prioritySelect').value = 'normal';
+      document.getElementById('waitPreview').style.display = 'none';
+    }
+  }
+
+  // ── Call Next ────────────────────────────────
+  async function callNext() {
+    const res  = await fetch('/api/next', { method: 'POST' });
+    const data = await res.json();
+    if (data.token) {
+      document.getElementById('nextToken').textContent = data.token;
+      const p = data.priority || 'normal';
+      document.getElementById('nextPriority').textContent =
+        p === 'emergency' ? '🔴 EMERGENCY' : p === 'senior' ? '🟠 SENIOR CITIZEN' : '🟢 NORMAL';
+    }
+  }
+
+  // ── Mark as Served ───────────────────────────
+  async function markServed(id) {
+    await fetch('/api/serve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id })
+    });
+  }
+
+  // ── Wait Time Preview ────────────────────────
+  async function updateWaitPreview() {
+    const priority = document.getElementById('prioritySelect').value;
+    const el = document.getElementById('waitPreview');
+    el.style.display = 'block';
+    el.textContent = '🔮 Calculating wait time...';
+    try {
+      const res  = await fetch(`/api/predict?priority=${priority}`);
+      const data = await res.json();
+      el.textContent = `🔮 Estimated wait: ~${data.estimated_wait_mins} min (Position #${data.position})`;
+    } catch (e) {
+      el.textContent = '🔮 Wait time unavailable';
+    }
+  }
+
+  // ── System Status ────────────────────────────
+  async function updateStats() { /* merged into loadQueue */ }
+
+  async function updateSystemStatus() {
+    try {
+      const res  = await fetch('/api/health');
+      const data = await res.json();
+      document.getElementById('sqliteStatus').textContent    = data.sqlite_status || '✅ LIVE';
+      document.getElementById('mysqlStatus').textContent     = data.mysql_status  || '🔴 Offline';
+      document.getElementById('hwStatusDetail').textContent  = data.hardware_status || '💻 Software Mode';
+      document.getElementById('lastSync').textContent        = new Date().toLocaleTimeString();
+
+      const netEl = document.getElementById('netStatus');
+      netEl.textContent = navigator.onLine ? '🟢 ONLINE' : '🟡 OFFLINE (SQLite Active)';
+      netEl.className   = navigator.onLine ? 'stat online' : 'stat offline';
+
+      const hwEl = document.getElementById('hwStatus');
+      hwEl.textContent  = data.hardware_status || '💻 Software Mode';
+      hwEl.className    = data.hardware_status?.includes('Arduino') ? 'stat hw-ok' : 'stat';
+    } catch (e) {}
+  }
+
+  // ── Auto Refresh ─────────────────────────────
+  setInterval(() => { loadQueue(); updateSystemStatus(); }, 3000);
+
+  // ── Initial Load ─────────────────────────────
+  loadQueue();
+  updateSystemStatus();
+
+  // ── Enter Key ────────────────────────────────
+  document.addEventListener('keypress', e => {
+    if (e.key === 'Enter') { e.preventDefault(); scanRFID(); }
+  });
+</script>
+</body>
+</html>
